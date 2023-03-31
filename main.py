@@ -3,21 +3,33 @@ import math
 import cv2 as cv
 import pymongo
 from bson.son import SON
+import datetime
+import numpy
 
 db_client = pymongo.MongoClient("mongodb://localhost:27017")
 current_db = db_client["stars_catalogue"]
 collection = current_db["stars05"]
 
+img = cv.imread('img39452000.png')
 NUM_OF_CIRCLES = 10
+FIELD_OF_VIEW = 3.94  # 4.22   # 3.73
+DEGREES_PER_PIXEL = FIELD_OF_VIEW / img.shape[1]
 
 
 def is_in_circle(current_star, r, star):
     return (math.dist(current_star, star)) ** 2 <= (r ** 2)
 
 
-def calculate_hash_for_star_photo(star_coord, stars, deg_in_one_pixel, cimg):
+def spherical_to_cartesian(l, phi, r):      # longitude  l, latitude phi
+    x = r * math.cos(phi) * math.cos(l)
+    y = r * math.cos(phi) * math.sin(l)
+    z = r * math.sin(phi)
+    return x, y, z
+
+
+def calculate_hash_for_star_photo(star_coord, stars, cimg):
     lst_hash = [0] * NUM_OF_CIRCLES
-    step = 0.05 / deg_in_one_pixel
+    step = 0.05 / DEGREES_PER_PIXEL
 
     cv.circle(cimg, (star_coord[0], star_coord[1]), int(step), (125, 205, 5), 2)
     cv.circle(cimg, (star_coord[0], star_coord[1]), int(step + 1 * step), (175, 5, 55), 2)
@@ -81,7 +93,6 @@ def calculate_hash_for_star_photo(star_coord, stars, deg_in_one_pixel, cimg):
 
 
 def find_stars(img):
-    field_of_view = 3.3  # 4.22   # 3.73
     dimention = img.shape
     stars = []
 
@@ -123,10 +134,9 @@ def find_stars(img):
     cv.imshow('Stars', img)
     cv.waitKey(0)
 
-    deg_in_one_pixel = field_of_view / dimention[1]
-    calculate_hash_for_star_photo(star1_coord, stars, deg_in_one_pixel, img)
-    calculate_hash_for_star_photo(star2_coord, stars, deg_in_one_pixel, img)
-    calculate_hash_for_star_photo(star3_coord, stars, deg_in_one_pixel, img)
+    calculate_hash_for_star_photo(star1_coord, stars, img)
+    calculate_hash_for_star_photo(star2_coord, stars, img)
+    calculate_hash_for_star_photo(star3_coord, stars, img)
     return stars
 
 
@@ -235,7 +245,20 @@ def identify_star(lst_hash):
             print('founded star: ', star)
 
 
+def func(star_ra, star_dec, dist_to_center_photo):
+    earth_speed_per_second = 360 / (24*60*60)   # 0.00416666667 градусів на секунду
+
+    noon_today = datetime.datetime.now().replace(hour=12, minute=0, second=0, microsecond=0)
+    seconds_since_noon = (datetime.datetime.now() - noon_today).total_seconds()          # num of sec from 12:00 to now
+
+    ro = earth_speed_per_second * seconds_since_noon      # the angle the Earth has turned from 12:00
+
+    latitude = star_dec                        # point on the Earth where star's light
+    longitude = star_ra - ro                   # falls at a right angle
+
+    observer_angle = dist_to_center_photo * DEGREES_PER_PIXEL   # the angle at which the observer sees the star
+
+
 # calculate_hash_for_db()
 
-img = cv.imread('img3301832.png')
 find_stars(img)
